@@ -54,10 +54,10 @@ function App() {
 
     const exercises: Exercise[] = [];
     for (let i = 0; i < count; i++) {
-      const name = await provider.view({
+      const [name] = await provider.view({
         function: `${MODULE_ADDRESS}::${MODULE_NAME}::get_exercise_name_by_index`,
         type_arguments: [],
-        arguments: [MODULE_ADDRESS, i],
+        arguments: [MODULE_ADDRESS, i.toString()],
       });
       console.log("name", name);
       //exercises.push({ name });
