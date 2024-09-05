@@ -8,7 +8,7 @@ import UserProfile from "./components/UserProfile";
 import { Aptos, AptosConfig } from "@aptos-labs/ts-sdk";
 
 //const MODULE_ADDRESS = "0xa268d07a4d0ca54e224ccc7b1b8507cac4d1529fa8f91a6961d42cf8c79a6655";
-const MODULE_ADDRESS = "0xf2fcbc36ec8511d3b4ff547cd2ac7d9c59065afe6e152bc42e55a31bf65480d9";
+const MODULE_ADDRESS = "0x8e04d7faa5840a11fe412ff491b2e751362e648365fae21c2b6f6097b12b2c8c";
 const MODULE_NAME = "workout_dapp";
 
 const provider = new Provider(Network.TESTNET);
@@ -213,7 +213,7 @@ function App() {
     if (!account) return;
     let exList: any = [];
 
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 7; i++) {
       try {
         const [exercise]: any = await provider.view({
           function: `${MODULE_ADDRESS}::${MODULE_NAME}::get_profile_exercise`,
