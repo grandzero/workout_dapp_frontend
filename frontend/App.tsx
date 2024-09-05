@@ -5,13 +5,12 @@ import { Provider, Network, Types } from "aptos";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import ExerciseList from "./components/ExerciseList";
 import UserProfile from "./components/UserProfile";
-import RandomWorkout from "./components/RandomWorkout";
 
-const MODULE_ADDRESS = "0x99b5445840dd5de2802c9c3dcb96abc5545e50d0cfaeb62a3dd2c3fc40be4139";
+const MODULE_ADDRESS = "0xa268d07a4d0ca54e224ccc7b1b8507cac4d1529fa8f91a6961d42cf8c79a6655";
 const MODULE_NAME = "workout_dapp";
 
 const provider = new Provider(Network.TESTNET);
-
+console.log = () => {};
 interface Exercise {
   name: string;
 }
@@ -21,8 +20,13 @@ interface ProfileExercise {
   total_workouts: number;
 }
 
-interface UserProfile {
+interface TotalWorkouts {
+  name: string;
   total_workouts: number;
+}
+
+interface UserProfile {
+  total_workouts: TotalWorkouts[];
   top_exercises: ProfileExercise[];
 }
 
@@ -38,6 +42,48 @@ function App() {
     }
   }, [account]);
 
+  function hexToString(hexString: any) {
+    try {
+      // Ensure the input is a string
+      if (typeof hexString !== "string") {
+        throw new Error("Input must be a string.");
+      }
+
+      // Ensure the string has an even number of characters
+      if (hexString.length % 2 !== 0) {
+        throw new Error("Hex string must have an even number of characters.");
+      }
+
+      // Ensure the string only contains valid hexadecimal characters
+      if (!/^0x[0-9a-fA-F]+$/.test(hexString)) {
+        throw new Error("Invalid hex string. Only characters 0-9, a-f, and A-F are allowed.");
+      }
+
+      // Split the string into an array of hex pairs (2 characters each)
+      let hexPairs = hexString.match(/.{1,2}/g);
+      if (!hexPairs) {
+        throw new Error("Invalid hex string.");
+      }
+      // Convert each hex pair to a character
+      let resultString = hexPairs
+        .map((hex) => {
+          // Convert hex pair to decimal (base 10)
+          let decimalValue = parseInt(hex, 16);
+          // Convert decimal to character
+          return String.fromCharCode(decimalValue);
+        })
+        .join("");
+
+      // Return the final human-readable string
+      return resultString;
+    } catch (error: any) {
+      // Log the error message
+      console.error("Error converting hex string:", error.message);
+      // Return null or an empty string, depending on your preference
+      return ""; // or return '';
+    }
+  }
+
   const fetchExercises = async () => {
     if (!account) return;
 
@@ -46,7 +92,7 @@ function App() {
         await provider.view({
           function: `${MODULE_ADDRESS}::${MODULE_NAME}::get_exercises_list_count`,
           type_arguments: [],
-          arguments: [MODULE_ADDRESS],
+          arguments: [account.address],
         })
       )[0],
     );
@@ -57,10 +103,10 @@ function App() {
       const [name] = await provider.view({
         function: `${MODULE_ADDRESS}::${MODULE_NAME}::get_exercise_name_by_index`,
         type_arguments: [],
-        arguments: [MODULE_ADDRESS, i.toString()],
+        arguments: [account.address, i.toString()],
       });
-      console.log("name", name);
-      //exercises.push({ name });
+      console.log("name", hexToString(name));
+      exercises.push({ name: hexToString(name) });
     }
     setExercises(exercises);
   };
@@ -68,38 +114,41 @@ function App() {
   const fetchUserProfile = async () => {
     if (!account) return;
 
-    const top3Exercises = (await provider.view({
+    let top3Exercises = (await provider.view({
       function: `${MODULE_ADDRESS}::${MODULE_NAME}::get_top_3_exercises`,
       type_arguments: [],
       arguments: [account.address],
-    })) as ProfileExercise[];
-
-    const [totalWorkouts] = (await provider.view({
-      function: `${MODULE_ADDRESS}::${MODULE_NAME}::get_profile_exercise`,
-      type_arguments: [],
-      arguments: [account.address, 0],
-    })) as [number];
+    })) as any;
+    let topExercises = top3Exercises[0];
+    let topEx = topExercises.map((exercise: any) => {
+      exercise.name = hexToString(exercise.name).replace("\x00", " ").trim();
+      return exercise;
+    });
+    console.log("top3Exercises ==== >", topExercises);
+    const workouts = await getProfileExercises();
 
     setUserProfile({
-      total_workouts: totalWorkouts,
-      top_exercises: top3Exercises,
+      total_workouts: workouts,
+      top_exercises: topEx,
     });
   };
 
   const startExercise = async (index: number) => {
     if (!account) return;
-
-    const payload: Types.TransactionPayload_EntryFunctionPayload = {
-      type: "entry_function_payload",
+    console.log("index", index);
+    const payload: any = {
       function: `${MODULE_ADDRESS}::${MODULE_NAME}::start_exercise`,
-      type_arguments: [],
-      arguments: [MODULE_ADDRESS, index],
+      typeArguments: [],
+      functionArguments: [account.address, index],
     };
+
+    console.log("payload", payload);
 
     try {
       const transaction = await signAndSubmitTransaction({
         data: payload as any,
       });
+      console.log("transaction", transaction);
       await provider.waitForTransaction(transaction.hash);
       fetchUserProfile();
     } catch (error) {
@@ -110,31 +159,81 @@ function App() {
   const mintNFT = async (index: number) => {
     if (!account) return;
 
-    const payload: Types.TransactionPayload = {
-      type: "entry_function_payload",
+    const payload = {
       function: `${MODULE_ADDRESS}::${MODULE_NAME}::mint_nft`,
-      type_arguments: [],
-      arguments: [index],
+      typeArguments: [],
+      functionArguments: [index],
     };
 
     try {
-      await signAndSubmitTransaction({
+      const transaction = await signAndSubmitTransaction({
         data: payload as any,
       });
+      await provider.waitForTransaction(transaction.hash);
       alert("NFT minted successfully!");
+      fetchUserProfile(); // Refresh user profile after minting
     } catch (error) {
       console.error("Error minting NFT:", error);
+      if (error instanceof Error) {
+        alert(`Error minting NFT: ${error.message}`);
+      } else {
+        alert("An unknown error occurred while minting NFT");
+      }
     }
+  };
+
+  const generateRandomWorkout = async () => {
+    if (!account) return;
+    const payload = {
+      function: `${MODULE_ADDRESS}::${MODULE_NAME}::get_random_exercise`,
+      typeArguments: [],
+      functionArguments: [],
+    };
+    try {
+      const transaction = await signAndSubmitTransaction({
+        data: payload as any,
+      });
+      console.log("transaction", transaction);
+      await provider.waitForTransaction(transaction.hash);
+      fetchUserProfile();
+    } catch (error) {
+      console.error("Error generating random workout:", error);
+    }
+  };
+
+  const getProfileExercises: () => Promise<{ name: string; total_workouts: number }[]> = async () => {
+    if (!account) return;
+    let exList: any = [];
+    console.log("Entered");
+    for (let i = 0; i < 6; i++) {
+      try {
+        const [exercise]: any = await provider.view({
+          function: `${MODULE_ADDRESS}::${MODULE_NAME}::get_profile_exercise`,
+          type_arguments: [],
+          arguments: [account.address, i.toString()],
+        });
+
+        console.log("name", hexToString(exercise.name));
+        exList.push({
+          name: hexToString(exercise.name).replace("\x00", " ").trim(),
+          total_workouts: exercise.total_workouts,
+        });
+      } catch (error) {
+        //console.error("Error getting profile exercises:", error);
+      }
+    }
+    console.log("Completed exercises count: ", exList);
+
+    return exList;
   };
 
   const resetStats = async () => {
     if (!account) return;
 
-    const payload: Types.TransactionPayload = {
-      type: "entry_function_payload",
+    const payload = {
       function: `${MODULE_ADDRESS}::${MODULE_NAME}::reset_my_stats`,
-      type_arguments: [],
-      arguments: [],
+      typeArguments: [],
+      functionArguments: [],
     };
 
     try {
@@ -147,8 +246,28 @@ function App() {
     }
   };
 
+  const createProfile = async () => {
+    if (!account) return;
+
+    const payload = {
+      function: `${MODULE_ADDRESS}::${MODULE_NAME}::create_profile`,
+      typeArguments: [],
+      functionArguments: [],
+    };
+
+    try {
+      await signAndSubmitTransaction({
+        data: payload as any,
+      });
+      fetchExercises();
+      fetchUserProfile();
+    } catch (error) {
+      console.error("Error creating profile:", error);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className="min-h-screen bg-gray-900 text-white relative">
       <div className="container mx-auto px-4 py-8">
         <h1 className="text-4xl font-bold mb-8 text-center">Workout dApp</h1>
         <div className="absolute top-4 right-4">
@@ -157,11 +276,41 @@ function App() {
           </div>
         </div>
         {account ? (
-          <div className="space-y-8">
-            <ExerciseList exercises={exercises} onStartExercise={startExercise} />
-            <UserProfile profile={userProfile} onMintNFT={mintNFT} onResetStats={resetStats} />
-            <RandomWorkout />
-          </div>
+          exercises.length === 0 ? (
+            <div className="flex justify-center mt-16">
+              <button
+                className="px-6 py-3 text-lg font-semibold rounded-lg"
+                onClick={createProfile}
+                style={{
+                  background: "none",
+                  border: "2px solid transparent",
+                  borderImage: "linear-gradient(to right, #3b82f6, #22c55e) 1",
+                  boxShadow: "0 0 10px rgba(59, 130, 246, 0.5)",
+                }}
+              >
+                Create Profile
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-8">
+              <ExerciseList exercises={exercises} onStartExercise={startExercise} />
+              <UserProfile profile={userProfile} onMintNFT={mintNFT} onResetStats={resetStats} />
+              <div className="flex justify-center mt-8">
+                <button
+                  className="px-6 py-3 text-lg font-semibold rounded-lg"
+                  onClick={generateRandomWorkout}
+                  style={{
+                    background: "none",
+                    border: "2px solid transparent",
+                    borderImage: "linear-gradient(to right, #3b82f6, #22c55e) 1",
+                    boxShadow: "0 0 10px rgba(59, 130, 246, 0.5)",
+                  }}
+                >
+                  Generate Random Workout
+                </button>
+              </div>
+            </div>
+          )
         ) : (
           <div className="flex flex-col items-center justify-center mt-16 text-center space-y-8">
             <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">
