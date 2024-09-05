@@ -45,7 +45,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ profile, onMintNFT, onResetSt
               <span className="text-lg">{exercise.name}</span>
               <div className="flex items-center">
                 <span className="text-xl font-bold mr-4">{exercise.total_workouts}</span>
-                {exercise.total_workouts > 5 && (
+                {exercise.total_workouts > 4 && (
                   <Button
                     onClick={() => onMintNFT(index)}
                     variant="outline"
