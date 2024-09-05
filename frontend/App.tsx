@@ -8,7 +8,7 @@ import UserProfile from "./components/UserProfile";
 import { Aptos, AptosConfig } from "@aptos-labs/ts-sdk";
 
 //const MODULE_ADDRESS = "0xa268d07a4d0ca54e224ccc7b1b8507cac4d1529fa8f91a6961d42cf8c79a6655";
-const MODULE_ADDRESS = "0x60406b0cf10e915ddc6d2f99d0075ba238aa1405f12310ccc56781b1f310429a";
+const MODULE_ADDRESS = "0xf2fcbc36ec8511d3b4ff547cd2ac7d9c59065afe6e152bc42e55a31bf65480d9";
 const MODULE_NAME = "workout_dapp";
 
 const provider = new Provider(Network.TESTNET);
