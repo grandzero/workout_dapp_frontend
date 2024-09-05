@@ -5,12 +5,14 @@ import { Provider, Network, Types } from "aptos";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import ExerciseList from "./components/ExerciseList";
 import UserProfile from "./components/UserProfile";
+import { Aptos, AptosConfig } from "@aptos-labs/ts-sdk";
 
-const MODULE_ADDRESS = "0xa268d07a4d0ca54e224ccc7b1b8507cac4d1529fa8f91a6961d42cf8c79a6655";
+//const MODULE_ADDRESS = "0xa268d07a4d0ca54e224ccc7b1b8507cac4d1529fa8f91a6961d42cf8c79a6655";
+const MODULE_ADDRESS = "0x60406b0cf10e915ddc6d2f99d0075ba238aa1405f12310ccc56781b1f310429a";
 const MODULE_NAME = "workout_dapp";
 
 const provider = new Provider(Network.TESTNET);
-console.log = () => {};
+
 interface Exercise {
   name: string;
 }
@@ -30,13 +32,21 @@ interface UserProfile {
   top_exercises: ProfileExercise[];
 }
 
+interface NFT {
+  name: string;
+  description: string;
+  uri: string;
+}
+
 function App() {
   const { account, signAndSubmitTransaction } = useWallet();
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [userNFTs, setUserNFTs] = useState<NFT[]>([]);
 
   useEffect(() => {
     if (account) {
+      fetchUserNFTs();
       fetchExercises();
       fetchUserProfile();
     }
@@ -96,7 +106,6 @@ function App() {
         })
       )[0],
     );
-    console.log("count", count);
 
     const exercises: Exercise[] = [];
     for (let i = 0; i < count; i++) {
@@ -105,7 +114,7 @@ function App() {
         type_arguments: [],
         arguments: [account.address, i.toString()],
       });
-      console.log("name", hexToString(name));
+
       exercises.push({ name: hexToString(name) });
     }
     setExercises(exercises);
@@ -124,7 +133,7 @@ function App() {
       exercise.name = hexToString(exercise.name).replace("\x00", " ").trim();
       return exercise;
     });
-    console.log("top3Exercises ==== >", topExercises);
+
     const workouts = await getProfileExercises();
 
     setUserProfile({
@@ -135,20 +144,18 @@ function App() {
 
   const startExercise = async (index: number) => {
     if (!account) return;
-    console.log("index", index);
+
     const payload: any = {
       function: `${MODULE_ADDRESS}::${MODULE_NAME}::start_exercise`,
       typeArguments: [],
       functionArguments: [account.address, index],
     };
 
-    console.log("payload", payload);
-
     try {
       const transaction = await signAndSubmitTransaction({
         data: payload as any,
       });
-      console.log("transaction", transaction);
+
       await provider.waitForTransaction(transaction.hash);
       fetchUserProfile();
     } catch (error) {
@@ -171,7 +178,8 @@ function App() {
       });
       await provider.waitForTransaction(transaction.hash);
       alert("NFT minted successfully!");
-      fetchUserProfile(); // Refresh user profile after minting
+      fetchUserProfile();
+      fetchUserNFTs();
     } catch (error) {
       console.error("Error minting NFT:", error);
       if (error instanceof Error) {
@@ -193,7 +201,7 @@ function App() {
       const transaction = await signAndSubmitTransaction({
         data: payload as any,
       });
-      console.log("transaction", transaction);
+
       await provider.waitForTransaction(transaction.hash);
       fetchUserProfile();
     } catch (error) {
@@ -204,7 +212,7 @@ function App() {
   const getProfileExercises: () => Promise<{ name: string; total_workouts: number }[]> = async () => {
     if (!account) return;
     let exList: any = [];
-    console.log("Entered");
+
     for (let i = 0; i < 6; i++) {
       try {
         const [exercise]: any = await provider.view({
@@ -213,7 +221,6 @@ function App() {
           arguments: [account.address, i.toString()],
         });
 
-        console.log("name", hexToString(exercise.name));
         exList.push({
           name: hexToString(exercise.name).replace("\x00", " ").trim(),
           total_workouts: exercise.total_workouts,
@@ -222,7 +229,6 @@ function App() {
         //console.error("Error getting profile exercises:", error);
       }
     }
-    console.log("Completed exercises count: ", exList);
 
     return exList;
   };
@@ -263,6 +269,40 @@ function App() {
       fetchUserProfile();
     } catch (error) {
       console.error("Error creating profile:", error);
+    }
+  };
+
+  const fetchUserNFTs = async () => {
+    if (!account) return;
+    console.log("Fetching user NFTs");
+
+    try {
+      const aptosConfig = new AptosConfig({ network: Network.TESTNET });
+      const aptos = new Aptos(aptosConfig);
+      const tokens = await aptos.getAccountOwnedTokens({ accountAddress: account.address });
+      console.log("Fetched account owned tokens:", tokens);
+
+      // Initialize an array to store the NFTs details
+      const nfts = [];
+
+      // Iterate through each token
+      for (const token of tokens) {
+        if (token.current_token_data) {
+          const nftDetails = {
+            name: token.current_token_data.token_name,
+            description: token.current_token_data.description,
+            uri: token.current_token_data.token_uri,
+          };
+
+          nfts.push(nftDetails);
+        }
+      }
+
+      console.log("NFTs fetched:", nfts);
+      setUserNFTs(nfts); // Store the fetched NFTs in the state
+    } catch (error) {
+      console.error("Error fetching user NFTs:", error);
+      setUserNFTs([]); // Handle errors by clearing the NFT list
     }
   };
 
@@ -309,6 +349,29 @@ function App() {
                   Generate Random Workout
                 </button>
               </div>
+              {userNFTs.length > 0 && (
+                <div className="mt-8">
+                  <h2 className="text-2xl font-bold mb-4">Your NFTs</h2>
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr>
+                        <th className="border px-4 py-2">Name</th>
+                        <th className="border px-4 py-2">Description</th>
+                        <th className="border px-4 py-2">URI</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {userNFTs.map((nft, index) => (
+                        <tr key={index}>
+                          <td className="border px-4 py-2">{nft.name}</td>
+                          <td className="border px-4 py-2">{nft.description}</td>
+                          <td className="border px-4 py-2">{nft.uri}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )
         ) : (
