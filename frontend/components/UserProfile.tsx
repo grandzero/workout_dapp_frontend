@@ -21,8 +21,6 @@ interface UserProfileProps {
 const UserProfile: React.FC<UserProfileProps> = ({ profile, onMintNFT, onResetStats }) => {
   if (!profile) return null;
 
-  const totalWorkouts = profile.total_workouts.reduce((sum, exercise) => sum + exercise.total_workouts, 0);
-
   return (
     <Card className="w-full bg-gray-800 text-white">
       <CardHeader>
